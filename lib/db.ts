@@ -1,0 +1,8 @@
+import Dexie,{type Table} from 'dexie';
+import {type Patient,type Caregiver,type ObservationSession,type MedicalEvent,type Backup,initialPatient,initialEvents,backupSchema,sessionSchema} from './model';
+export class CareDB extends Dexie {patients!:Table<Patient,string>;caregivers!:Table<Caregiver,string>;sessions!:Table<ObservationSession,string>;events!:Table<MedicalEvent,string>;constructor(name='zhiyi-care'){super(name);this.version(1).stores({patients:'id',caregivers:'id',sessions:'id,patientId,observedAt,status,demo',events:'id,patientId,date'});}}
+export const db=new CareDB();
+export async function initialize(){await db.transaction('rw',db.patients,db.caregivers,db.events,async()=>{if(await db.patients.count()===0){await db.patients.add(initialPatient);await db.caregivers.add({id:'caregiver-1',name:'家属'});await db.events.bulkAdd(initialEvents);}});}
+export async function saveSession(s:ObservationSession){return db.sessions.put(sessionSchema.parse(s));}
+export async function exportBackup():Promise<Backup>{return backupSchema.parse({schemaVersion:1,exportedAt:new Date().toISOString(),patient:(await db.patients.toArray())[0],caregivers:await db.caregivers.toArray(),sessions:await db.sessions.toArray(),events:await db.events.toArray()});}
+export async function importBackup(input:unknown){const b=backupSchema.parse(input);await db.transaction('rw',db.patients,db.caregivers,db.sessions,db.events,async()=>{await Promise.all([db.patients.clear(),db.caregivers.clear(),db.sessions.clear(),db.events.clear()]);await db.patients.add(b.patient);await db.caregivers.bulkAdd(b.caregivers);await db.sessions.bulkAdd(b.sessions);await db.events.bulkAdd(b.events);});}

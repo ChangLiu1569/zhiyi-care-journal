@@ -1,0 +1,24 @@
+import {test,expect} from '@playwright/test';
+test('完整家庭记录流程、刷新、Demo隔离、报告与移动端',async({page})=>{
+await page.goto((process.env.TEST_BASE_PATH||'')+'/');await expect(page.getByText('还没有真实观察记录')).toBeVisible();
+await page.getByRole('button',{name:'开始今日观察'}).click();
+await page.getByLabel('干扰因素：睡眠、疼痛、听力、刚服药、发热等').fill('昨晚睡眠不足');
+await page.getByRole('button',{name:'下一步'}).click();
+await page.getByLabel('真实事件',{exact:true}).fill('上午女儿探望');
+await page.getByLabel('记得有人来过，但想不起是谁',{exact:true}).check();
+await page.getByLabel('患者原话 / 实际行为').fill('有人来过，名字说不出来');
+await page.getByRole('button',{name:'下一步'}).click();
+for(let n=0;n<6;n++)await page.getByRole('button',{name:'跳过本项'}).click();
+await page.getByLabel('观察者备注 / 担忧').fill('想向医生确认表达困难');
+await page.getByRole('button',{name:'保存观察'}).click();await expect(page.getByRole('heading',{name:'真实观察历史 · 1 次'})).toBeVisible();
+await page.reload();await expect(page.getByRole('heading',{name:'真实观察历史 · 1 次'})).toBeVisible();
+await page.getByRole('button',{name:'添加隔离示例'}).click();await expect(page.getByRole('heading',{name:'Demo 示例历史 · 3 次'})).toBeVisible();
+await page.goto((process.env.TEST_BASE_PATH||'')+'/');await expect(page.getByText('1 次',{exact:true})).toBeVisible();
+await page.goto((process.env.TEST_BASE_PATH||'')+'/export');const pdf=page.waitForEvent('download');await page.getByRole('button',{name:'导出中文 PDF'}).click();await (await pdf).saveAs('tmp/pdfs/browser-report.pdf');
+const backup=page.waitForEvent('download');await page.getByRole('button',{name:'导出完整 JSON 备份'}).click();await (await backup).saveAs('tmp/backup.json');
+await page.setViewportSize({width:390,height:844});await page.goto((process.env.TEST_BASE_PATH||'')+'/');await expect(page.getByRole('heading',{name:'把每天的小变化，认真记下来'})).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);await page.screenshot({path:'tmp/mobile.png',fullPage:true});
+await page.setViewportSize({width:1440,height:1000});await page.screenshot({path:'tmp/desktop.png',fullPage:true});
+});
+test('安全提醒、草稿恢复与深色模式',async({page})=>{await page.goto((process.env.TEST_BASE_PATH||'')+'/observe');await page.getByLabel('新出现单侧肢体无力',{exact:true}).check();await expect(page.getByRole('dialog')).toContainText('请立即联系医护人员');await page.getByRole('button',{name:'我已看到提醒，返回记录'}).click();await expect(page.locator('.urgent[role=alert]')).toContainText('请立即联系医护人员');await page.waitForTimeout(600);await page.reload();await expect(page.getByLabel('新出现单侧肢体无力',{exact:true})).toBeChecked();await page.getByRole('button',{name:'切换浅色和深色模式'}).click();await expect(page.locator('html')).toHaveAttribute('data-theme','dark');await page.screenshot({path:'tmp/dark-observe.png',fullPage:true});});
+test('JSON恢复格式验证后完整重建',async({page})=>{await page.goto((process.env.TEST_BASE_PATH||'')+'/export');page.on('dialog',dialog=>dialog.accept());await page.getByLabel('从 JSON 恢复（验证后替换本机全部数据，请先备份）').setInputFiles('tmp/backup.json');await expect(page.getByRole('status')).toContainText('备份恢复完成');await page.goto((process.env.TEST_BASE_PATH||'')+'/history');await expect(page.getByRole('heading',{name:'真实观察历史 · 1 次'})).toBeVisible();});
+test('手机底部导航可以进入更多功能',async({page})=>{await page.setViewportSize({width:390,height:844});await page.goto((process.env.TEST_BASE_PATH||'')+'/');const tabs=page.getByRole('navigation',{name:'手机主导航'});await expect(tabs).toBeVisible();await tabs.getByRole('button',{name:'更多'}).click();await page.locator('.mobile-menu').getByRole('link',{name:'报告与备份'}).click();await expect(page.getByRole('heading',{name:'医生沟通报告'})).toBeVisible();await tabs.getByRole('link',{name:'观察',exact:true}).click();await expect(page.getByRole('heading',{name:'开始前，记录这一次交流'})).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);});
